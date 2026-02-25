@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+.font-en {
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+.font-bn {
+  font-family: var(--font-hind-siliguri), sans-serif;
+}
+
+body {
+  scroll-behavior: smooth;
+}
+
+.nav-glass-base {
+  background: rgba(4, 47, 36, 0.45);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.floating-menu {
+  border-left: 3px solid #f97316;
+  border-right: 3px solid #f97316;
+  border-radius: 9999px;
+  margin-top: 0.2rem;
+  z-index: 50;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  width: fit-content;
+  max-width: 95%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.menu-hidden {
+  transform: translateY(-60px) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.menu-visible {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.premium-card {
+  background: white;
+  border-radius: 1.5rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.05);
+  transition: all 0.4s ease;
+}
+
+.premium-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 25px 40px -15px rgba(6, 78, 59, 0.15);
+  border-color: #f97316;
+}
+
+.heading-institutional {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 0.5rem;
+}
+
+.heading-institutional::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 4px;
+  background: #f97316;
+  border-radius: 2px;
+}
+
+.faculty-card-top {
+  height: 8px;
+  width: 100%;
+  background: #f97316;
+  border-radius: 1rem 1rem 0 0;
+}
+
+.custom-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23f97316'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1.5rem center;
+  background-size: 1.2rem;
+}
+
+.query-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-size: 0.875rem;
+  transition: all 0.3s ease;
+  width: 100%;
+}
+
+.query-input:focus {
+  outline: none;
+  border-color: #f97316;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.gallery-zoom {
+  overflow: hidden;
+}
+
+.gallery-zoom img {
+  transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.gallery-zoom:hover img {
+  transform: scale(1.1);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
