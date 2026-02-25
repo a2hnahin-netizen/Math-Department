@@ -3,18 +3,22 @@
 import React from 'react';
 import { BookOpen, FileText, Download, Library, Search, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 export default function ResourcesPage() {
     const { t, lang } = useLanguage();
     const [resources, setResources] = React.useState([]);
 
     React.useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/resources')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setResources(data);
-            })
-            .catch(err => console.error(err));
+        const fetchResources = async () => {
+            const { data, error } = await supabase
+                .from('resources')
+                .select('*')
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+            if (!error) setResources(data || []);
+        };
+        fetchResources();
     }, []);
 
     // Helper to filter resources by category
@@ -77,7 +81,7 @@ export default function ResourcesPage() {
                                 <ul className="space-y-3">
                                     {catResources.length > 0 ? catResources.map((item, i) => (
                                         <li key={i}>
-                                            <a href={item.file_path ? `http://127.0.0.1:8000/${item.file_path}` : '#'} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-white/60 rounded-xl hover:bg-white transition-all group cursor-pointer border border-transparent hover:border-slate-200">
+                                            <a href={item.file_path ? (item.file_path.startsWith('http') ? item.file_path : `http://127.0.0.1:8000/${item.file_path}`) : '#'} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-white/60 rounded-xl hover:bg-white transition-all group cursor-pointer border border-transparent hover:border-slate-200">
                                                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wide group-hover:text-[#064e3b] truncate pr-2">{item.title}</span>
                                                 <Download size={14} className="text-slate-400 group-hover:text-orange-500 transition-colors shrink-0" />
                                             </a>

@@ -22,6 +22,7 @@ import {
     Mail
 } from 'lucide-react';
 import { uploadImageToImgBB } from '../utils/imgbb';
+import { supabase } from '../lib/supabase';
 
 const AdminDashboard = () => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -74,23 +75,23 @@ const AdminDashboard = () => {
     const paginatedNotices = filteredNotices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     useEffect(() => {
-        // Fetch notices on mount
-        fetch('http://127.0.0.1:8000/api/notices')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setNotices(data);
-                else console.error('Notices data is not an array:', data);
-            })
-            .catch(err => console.error('Fetch notices error:', err));
+        const fetchData = async () => {
+            // Fetch notices
+            const { data: noticesData, error: noticesError } = await supabase
+                .from('notices')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (!noticesError) setNotices(noticesData || []);
 
-        // Fetch faculty on mount
-        fetch('http://127.0.0.1:8000/api/faculty/all')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setFacultyMembers(data);
-                else console.error('Faculty data is not an array:', data);
-            })
-            .catch(err => console.error('Fetch faculty error:', err));
+            // Fetch faculty
+            const { data: facultyData, error: facultyError } = await supabase
+                .from('faculty')
+                .select('*')
+                .order('order', { ascending: true });
+            if (!facultyError) setFacultyMembers(facultyData || []);
+        };
+
+        fetchData();
     }, []);
 
     const handleFileChange = (e) => {
@@ -102,104 +103,114 @@ const AdminDashboard = () => {
     const handleUpload = async (e) => {
         e.preventDefault();
 
-        const formData = new FormData();
-        formData.append('title', newNotice.title);
-        formData.append('category', newNotice.category);
-        formData.append('description', newNotice.description);
-        if (newNotice.file) {
-            formData.append('file', newNotice.file);
-        }
-
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/notices', {
-                method: 'POST',
-                body: formData,
-            });
+            let file_path = null;
+            if (newNotice.file) {
+                const fileExt = newNotice.file.name.split('.').pop();
+                const fileName = `${Math.random()}.${fileExt}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('notices')
+                    .upload(fileName, newNotice.file);
 
-            if (res.ok) {
-                const data = await res.json();
-                setNotices([data.notice, ...notices]); // Prepend new notice
+                if (uploadError) throw uploadError;
+                const { data: { publicUrl } } = supabase.storage
+                    .from('notices')
+                    .getPublicUrl(fileName);
+                file_path = publicUrl;
+            }
+
+            const { data, error } = await supabase
+                .from('notices')
+                .insert([{
+                    title: newNotice.title,
+                    category: newNotice.category,
+                    description: newNotice.description,
+                    file_path: file_path
+                }])
+                .select();
+
+            if (data) {
+                setNotices([data[0], ...notices]);
                 setNewNotice({ title: '', category: 'Honours', description: '', file: null });
                 alert('Notice uploaded successfully!');
-            } else {
-                alert('Failed to upload notice');
             }
+            if (error) throw error;
         } catch (error) {
             console.error('Error uploading notice:', error);
-            alert('Error uploading notice');
+            alert('Error uploading notice: ' + error.message);
         }
     };
 
-    const handleDelete = (id) => {
-        setNotices(notices.filter(n => n.id !== id));
+    const handleDelete = async (id) => {
+        if (!confirm('Are you sure you want to delete this notice?')) return;
+        const { error } = await supabase
+            .from('notices')
+            .delete()
+            .eq('id', id);
+
+        if (!error) {
+            setNotices(notices.filter(n => n.id !== id));
+        } else {
+            alert('Error deleting notice: ' + error.message);
+        }
     };
 
     const handleFacultyUpload = async (e) => {
         e.preventDefault();
-        const formData = new FormData();
-
-        // Explicitly append fields to ensure clarity and handle optional values
-        formData.append('name', newFaculty.name);
-        formData.append('designation', newFaculty.designation);
-
-        if (newFaculty.qualification) formData.append('qualification', newFaculty.qualification);
-        if (newFaculty.specialization) formData.append('specialization', newFaculty.specialization);
-        if (newFaculty.email) formData.append('email', newFaculty.email);
-        if (newFaculty.phone) formData.append('phone', newFaculty.phone);
-
-        if (newFaculty.image) {
-            try {
-                const imageUrl = await uploadImageToImgBB(newFaculty.image);
-                formData.append('image', imageUrl); // Append URL string
-            } catch (error) {
-                console.error('ImgBB Upload Failed:', error);
-                alert('Failed to upload image. Please try again.');
-                return;
-            }
-        }
-
-        // Handle numeric/boolean values
-        formData.append('order', parseInt(newFaculty.order) || 0);
-        formData.append('is_active', newFaculty.is_active ? 1 : 0);
 
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/faculty', {
-                method: 'POST',
-                body: formData,
-            });
+            let image_path = null;
+            if (newFaculty.image) {
+                try {
+                    image_path = await uploadImageToImgBB(newFaculty.image);
+                } catch (error) {
+                    console.error('ImgBB Upload Failed:', error);
+                    alert('Failed to upload image. Please try again.');
+                    return;
+                }
+            }
 
-            const data = await res.json();
+            const { data, error } = await supabase
+                .from('faculty')
+                .insert([{
+                    name: newFaculty.name,
+                    designation: newFaculty.designation,
+                    qualification: newFaculty.qualification,
+                    specialization: newFaculty.specialization,
+                    email: newFaculty.email,
+                    phone: newFaculty.phone,
+                    image_path: image_path,
+                    order: parseInt(newFaculty.order) || 0,
+                    is_active: newFaculty.is_active
+                }])
+                .select();
 
-            if (res.ok) {
-                setFacultyMembers([...facultyMembers, data.faculty]);
+            if (data) {
+                setFacultyMembers([...facultyMembers, data[0]]);
                 setNewFaculty({
                     name: '', designation: '', qualification: '', specialization: '',
                     email: '', phone: '', image: null, order: '0', is_active: true
                 });
                 alert('Faculty member added successfully!');
-            } else {
-                console.error('Validation/Server Error:', data);
-                alert(`Failed to add faculty: ${data.message || 'Unknown error'}`);
             }
+            if (error) throw error;
         } catch (error) {
-            console.error('Network/Runtime Error:', error);
+            console.error('Error adding faculty:', error);
             alert(`Error adding faculty: ${error.message}`);
         }
     };
 
     const handleFacultyDelete = async (id) => {
         if (!confirm('Are you sure you want to delete this faculty member?')) return;
-        try {
-            const res = await fetch(`http://127.0.0.1:8000/api/faculty/${id}`, {
-                method: 'DELETE',
-            });
-            if (res.ok) {
-                setFacultyMembers(facultyMembers.filter(f => f.id !== id));
-            } else {
-                alert('Failed to delete faculty member');
-            }
-        } catch (error) {
-            console.error('Error deleting faculty:', error);
+        const { error } = await supabase
+            .from('faculty')
+            .delete()
+            .eq('id', id);
+
+        if (!error) {
+            setFacultyMembers(facultyMembers.filter(f => f.id !== id));
+        } else {
+            alert('Failed to delete faculty member: ' + error.message);
         }
     };
 
@@ -218,38 +229,63 @@ const AdminDashboard = () => {
     const [newResource, setNewResource] = useState({ title: '', category: 'Syllabus', description: '', file: null });
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/resources')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setResources(data);
-            })
-            .catch(err => console.error(err));
+        const fetchResources = async () => {
+            const { data, error } = await supabase
+                .from('resources')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (!error) setResources(data || []);
+        };
+        fetchResources();
     }, []);
 
     const handleResourceUpload = async (e) => {
         e.preventDefault();
-        const formData = new FormData();
-        formData.append('title', newResource.title);
-        formData.append('category', newResource.category);
-        formData.append('description', newResource.description);
-        if (newResource.file) formData.append('file', newResource.file);
+        try {
+            let file_path = null;
+            if (newResource.file) {
+                const fileExt = newResource.file.name.split('.').pop();
+                const fileName = `${Math.random()}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('resources')
+                    .upload(fileName, newResource.file);
 
-        const res = await fetch('http://127.0.0.1:8000/api/resources', { method: 'POST', body: formData });
-        if (res.ok) {
-            const data = await res.json();
-            setResources([data.resource, ...resources]);
-            setNewResource({ title: '', category: 'Syllabus', description: '', file: null });
-            alert('Resource uploaded!');
+                if (uploadError) throw uploadError;
+                const { data: { publicUrl } } = supabase.storage
+                    .from('resources')
+                    .getPublicUrl(fileName);
+                file_path = publicUrl;
+            }
+
+            const { data, error } = await supabase
+                .from('resources')
+                .insert([{
+                    title: newResource.title,
+                    category: newResource.category,
+                    description: newResource.description,
+                    file_path: file_path
+                }])
+                .select();
+
+            if (data) {
+                setResources([data[0], ...resources]);
+                setNewResource({ title: '', category: 'Syllabus', description: '', file: null });
+                alert('Resource uploaded!');
+            }
+            if (error) throw error;
+        } catch (error) {
+            alert('Error: ' + error.message);
         }
     };
 
     const handleResourceDelete = async (id) => {
         if (!confirm('Delete resource?')) return;
-        const res = await fetch(`http://127.0.0.1:8000/api/resources/${id}`, { method: 'DELETE' });
-        if (res.ok) setResources(resources.filter(r => r.id !== id));
+        const { error } = await supabase
+            .from('resources')
+            .delete()
+            .eq('id', id);
+        if (!error) setResources(resources.filter(r => r.id !== id));
     };
-
-
 
     useEffect(() => {
         fetchUnreadCount();
@@ -258,23 +294,28 @@ const AdminDashboard = () => {
         }
     }, [activeTab]);
 
-    const fetchUnreadCount = () => {
-        fetch('http://127.0.0.1:8000/api/admin/messages/unread-count')
-            .then(res => res.json())
-            .then(data => setUnreadCount(data.count))
-            .catch(err => console.error(err));
+    const fetchUnreadCount = async () => {
+        const { count, error } = await supabase
+            .from('contact_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('is_read', false);
+        if (!error) setUnreadCount(count);
     };
 
-    const fetchMessages = () => {
-        fetch('http://127.0.0.1:8000/api/admin/messages')
-            .then(res => res.json())
-            .then(setMessages)
-            .catch(err => console.error(err));
+    const fetchMessages = async () => {
+        const { data, error } = await supabase
+            .from('contact_messages')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (!error) setMessages(data || []);
     };
 
     const handleMarkRead = async (id) => {
-        const res = await fetch(`http://127.0.0.1:8000/api/admin/messages/${id}/read`, { method: 'POST' });
-        if (res.ok) {
+        const { error } = await supabase
+            .from('contact_messages')
+            .update({ is_read: true })
+            .eq('id', id);
+        if (!error) {
             setMessages(messages.map(m => m.id === id ? { ...m, is_read: true } : m));
             fetchUnreadCount();
         }
@@ -282,10 +323,13 @@ const AdminDashboard = () => {
 
     const handleDeleteMessage = async (id) => {
         if (!confirm('Delete this message?')) return;
-        const res = await fetch(`http://127.0.0.1:8000/api/admin/messages/${id}`, { method: 'DELETE' });
-        if (res.ok) {
+        const { error } = await supabase
+            .from('contact_messages')
+            .delete()
+            .eq('id', id);
+        if (!error) {
             setMessages(messages.filter(m => m.id !== id));
-            fetchUnreadCount(); // Should update if deleting unread
+            fetchUnreadCount();
         }
     };
 
@@ -302,50 +346,67 @@ const AdminDashboard = () => {
         }
     }, [activeTab]);
 
-    const fetchBooks = () => {
-        fetch('http://127.0.0.1:8000/api/books')
-            .then(res => res.json())
-            .then(data => Array.isArray(data) && setBooks(data))
-            .catch(err => console.error(err));
+    const fetchBooks = async () => {
+        const { data, error } = await supabase
+            .from('books')
+            .select('*')
+            .order('title', { ascending: true });
+        if (!error) setBooks(data || []);
     };
 
     const handleBookUpload = async (e) => {
         e.preventDefault();
-        const res = await fetch('http://127.0.0.1:8000/api/books', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newBook)
-        });
-        if (res.ok) {
+        const { data, error } = await supabase
+            .from('books')
+            .insert([newBook])
+            .select();
+
+        if (data) {
             fetchBooks();
             setNewBook({ title: '', author: '', accession_number: '', quantity: 1 });
             alert('Book added!');
         } else {
-            alert('Failed to add book. Ensure Accession Number is unique.');
+            alert('Failed to add book: ' + error.message);
         }
     };
 
     const handleLendSubmit = async (e) => {
         e.preventDefault();
-        const res = await fetch(`http://127.0.0.1:8000/api/books/${selectedBook.id}/lend`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(borrower)
-        });
-        if (res.ok) {
+        const { error } = await supabase
+            .from('books')
+            .update({
+                ...borrower,
+                is_available: false,
+                borrowed_at: new Date().toISOString()
+            })
+            .eq('id', selectedBook.id);
+
+        if (!error) {
             fetchBooks();
             setShowLendModal(false);
             setBorrower({ borrower_name: '', borrower_roll: '', borrower_session: '', borrower_program: '', borrower_phone: '' });
             alert('Book lent successfully!');
         } else {
-            alert('Failed to lend book.');
+            alert('Error: ' + error.message);
         }
     };
 
     const handleReturnBook = async (id) => {
         if (!confirm('Confirm return?')) return;
-        const res = await fetch(`http://127.0.0.1:8000/api/books/${id}/return`, { method: 'POST' });
-        if (res.ok) {
+        const { error } = await supabase
+            .from('books')
+            .update({
+                is_available: true,
+                borrower_name: null,
+                borrower_roll: null,
+                borrower_session: null,
+                borrower_program: null,
+                borrower_phone: null,
+                borrowed_at: null
+            })
+            .eq('id', id);
+
+        if (!error) {
             fetchBooks();
             alert('Book returned!');
         }
@@ -353,8 +414,61 @@ const AdminDashboard = () => {
 
     const handleBookDelete = async (id) => {
         if (!confirm('Delete book?')) return;
-        const res = await fetch(`http://127.0.0.1:8000/api/books/${id}`, { method: 'DELETE' });
-        if (res.ok) setBooks(books.filter(b => b.id !== id));
+        const { error } = await supabase
+            .from('books')
+            .delete()
+            .eq('id', id);
+        if (!error) setBooks(books.filter(b => b.id !== id));
+    };
+
+    // Gallery State & Handlers
+    const [gallery, setGallery] = useState([]);
+    const [newGallery, setNewGallery] = useState({ title: '', image: null });
+
+    useEffect(() => {
+        if (activeTab === 'gallery') {
+            fetchGallery();
+        }
+    }, [activeTab]);
+
+    const fetchGallery = async () => {
+        const { data, error } = await supabase
+            .from('gallery')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (!error) setGallery(data || []);
+    };
+
+    const handleGalleryUpload = async (e) => {
+        e.preventDefault();
+        try {
+            if (!newGallery.image) return;
+            const imageUrl = await uploadImageToImgBB(newGallery.image);
+
+            const { data, error } = await supabase
+                .from('gallery')
+                .insert([{ title: newGallery.title, url: imageUrl }])
+                .select();
+
+            if (data) {
+                setGallery([data[0], ...gallery]);
+                setNewGallery({ title: '', image: null });
+                alert('Gallery item added!');
+            } else {
+                throw error;
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    };
+
+    const handleGalleryDelete = async (id) => {
+        if (!confirm('Delete this item?')) return;
+        const { error } = await supabase
+            .from('gallery')
+            .delete()
+            .eq('id', id);
+        if (!error) setGallery(gallery.filter(item => item.id !== id));
     };
 
     const renderContent = () => {
@@ -726,8 +840,42 @@ const AdminDashboard = () => {
                         </div>
                     </div>
                 );
+            case 'gallery':
+                return (
+                    <div className="space-y-8">
+                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                                <ImageIcon size={24} className="text-orange-500" /> Add to Gallery
+                            </h3>
+                            <form onSubmit={handleGalleryUpload} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input
+                                    type="text" placeholder="Title / Event Name" className="bg-slate-50 p-3 rounded-lg border font-bold"
+                                    value={newGallery.title} onChange={e => setNewGallery({ ...newGallery, title: e.target.value })} required
+                                />
+                                <input type="file" className="p-3 font-bold text-sm text-slate-500" onChange={e => setNewGallery({ ...newGallery, image: e.target.files[0] })} required />
+                                <button type="submit" className="md:col-span-2 bg-[#064e3b] text-white py-3 rounded-lg font-black uppercase tracking-widest hover:bg-emerald-800 transition-all shadow-lg">Upload to Gallery</button>
+                            </form>
+                        </div>
+                        <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 className="text-xl font-black text-slate-800 mb-6">Gallery Items ({gallery.length})</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                {gallery.map(item => (
+                                    <div key={item.id} className="relative group rounded-xl overflow-hidden aspect-video border border-slate-100">
+                                        <img src={item.url} alt={item.title} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center p-4">
+                                            <p className="text-white text-xs font-bold mb-4 text-center">{item.title}</p>
+                                            <button onClick={() => handleGalleryDelete(item.id)} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'settings':
-                return <div className="p-10 text-center font-bold text-slate-400">Select a section from the sidebar to manage content</div>;
+                return <div className="p-10 text-center font-bold text-slate-400">Settings management coming soon...</div>;
             case 'resources':
                 return (
                     <div className="space-y-8">

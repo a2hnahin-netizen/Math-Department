@@ -10,6 +10,7 @@ import {
     Send
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 const Footer = () => {
     const { t } = useLanguage();
@@ -22,22 +23,26 @@ const Footer = () => {
     const handleQuerySubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch('http://127.0.0.1:8000/api/contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: queryName, email: queryEmail, message: queryMsg })
-            });
-            if (res.ok) {
+            const { error } = await supabase
+                .from('contact_messages')
+                .insert([{
+                    name: queryName,
+                    email: queryEmail,
+                    message: queryMsg,
+                    is_read: false
+                }]);
+
+            if (!error) {
                 alert('Message sent successfully!');
                 setQueryName('');
                 setQueryEmail('');
                 setQueryMsg('');
             } else {
-                alert('Failed to send message. Please try again.');
+                throw error;
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            alert('An error occurred.');
+            alert('An error occurred: ' + error.message);
         }
     };
 

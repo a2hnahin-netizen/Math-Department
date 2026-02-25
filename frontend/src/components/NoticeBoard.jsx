@@ -17,13 +17,14 @@ import {
     Download
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 const NoticeBoard = () => {
     const { lang, setLang, t } = useLanguage();
 
     const [searchTerm, setSearchTerm] = useState('');
 
-    // Fetch notices from API
+    // Fetch notices from Supabase
     const [notices, setNotices] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -32,16 +33,23 @@ const NoticeBoard = () => {
     const [filterDate, setFilterDate] = useState('');
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/notices')
-            .then(res => res.json())
-            .then(data => {
-                setNotices(data);
-                setLoading(false);
-            })
-            .catch(err => {
+        const fetchNotices = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('notices')
+                    .select('*')
+                    .order('published_at', { ascending: false });
+
+                if (error) throw error;
+                setNotices(data || []);
+            } catch (err) {
                 console.error('Failed to fetch notices:', err);
+            } finally {
                 setLoading(false);
-            });
+            }
+        };
+
+        fetchNotices();
     }, []);
 
 
@@ -164,7 +172,7 @@ const NoticeBoard = () => {
                                     {/* Action */}
                                     {notice.file_path && (
                                         <a
-                                            href={`http://127.0.0.1:8000/${notice.file_path}`}
+                                            href={notice.file_path.startsWith('http') ? notice.file_path : `http://127.0.0.1:8000/${notice.file_path}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-2 bg-[#064e3b] text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-orange-500 transition-all shrink-0"

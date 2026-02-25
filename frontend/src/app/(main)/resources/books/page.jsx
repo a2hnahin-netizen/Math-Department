@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, BookOpen, ChevronLeft } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 export default function AvailableBooksPage() {
@@ -9,12 +10,15 @@ export default function AvailableBooksPage() {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/books/available')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setBooks(data);
-            })
-            .catch(err => console.error(err));
+        const fetchBooks = async () => {
+            const { data, error } = await supabase
+                .from('books')
+                .select('*')
+                .eq('is_available', true)
+                .order('title', { ascending: true });
+            if (!error) setBooks(data || []);
+        };
+        fetchBooks();
     }, []);
 
     const filteredBooks = books.filter(book =>

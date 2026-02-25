@@ -27,6 +27,7 @@ import {
     Users
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 const LandingPage = () => {
     const { lang, setLang, t } = useLanguage();
@@ -44,17 +45,29 @@ const LandingPage = () => {
     const [queryMsg, setQueryMsg] = useState('');
 
     useEffect(() => {
-        // Fetch faculty from API
-        fetch('http://127.0.0.1:8000/api/faculty')
-            .then(res => res.json())
-            .then(data => setFacultyMembers(data))
-            .catch(err => console.error('Failed to fetch faculty:', err));
+        const fetchPublicData = async () => {
+            try {
+                // Fetch faculty from Supabase
+                const { data: facultyData, error: facultyError } = await supabase
+                    .from('faculty')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('order', { ascending: true });
+                if (!facultyError) setFacultyMembers(facultyData || []);
 
-        // Fetch notices from API
-        fetch('http://127.0.0.1:8000/api/notices')
-            .then(res => res.json())
-            .then(data => setNotices(data.slice(0, 2)))
-            .catch(err => console.error('Failed to fetch notices:', err));
+                // Fetch latest 2 notices from Supabase
+                const { data: noticesData, error: noticesError } = await supabase
+                    .from('notices')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(2);
+                if (!noticesError) setNotices(noticesData || []);
+            } catch (err) {
+                console.error('Failed to fetch public data:', err);
+            }
+        };
+
+        fetchPublicData();
     }, []);
 
     // Slideshow Logic
@@ -276,7 +289,7 @@ const LandingPage = () => {
                                             <div key={idx} className="premium-card group relative flex flex-col items-center p-0 w-full sm:w-[calc(50%-20px)] lg:w-[calc(33.33%-27px)] max-w-sm overflow-hidden bg-white">
                                                 <div className="w-full h-64 relative overflow-hidden bg-slate-100">
                                                     {teacher.image_path ? (
-                                                        <img src={`http://127.0.0.1:8000/${teacher.image_path}`} alt={teacher.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
+                                                        <img src={teacher.image_path.startsWith('http') ? teacher.image_path : `http://127.0.0.1:8000/${teacher.image_path}`} alt={teacher.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
                                                     ) : (
                                                         <img src={`https://ui-avatars.com/api/?name=${teacher.name.replace(' ', '+')}&background=${idx % 2 === 0 ? '064e3b' : 'ea580c'}&color=fff&size=400`} alt={teacher.name} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
                                                     )}

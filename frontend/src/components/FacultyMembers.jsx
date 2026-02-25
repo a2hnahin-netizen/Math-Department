@@ -15,6 +15,7 @@ import {
     Send
 } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 
 const FacultyPage = () => {
     const { lang, setLang, t } = useLanguage();
@@ -23,16 +24,23 @@ const FacultyPage = () => {
 
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/faculty')
-            .then(res => res.json())
-            .then(data => {
-                setFacultyMembers(data);
-                setLoading(false);
-            })
-            .catch(err => {
+        const fetchFaculty = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('faculty')
+                    .select('*')
+                    .eq('is_active', true)
+                    .order('order', { ascending: true });
+
+                if (data) setFacultyMembers(data);
+                if (error) throw error;
+            } catch (err) {
                 console.error('Failed to fetch faculty:', err);
+            } finally {
                 setLoading(false);
-            });
+            }
+        };
+        fetchFaculty();
     }, []);
 
 
